@@ -17,8 +17,7 @@
         input, select { width: 100%; padding: 10px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px; }
         button { padding: 8px 16px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; word-wrap: break-word; vertical-align: middle; }
-        th { background: #f5f5f7; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
         #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; }
         #toast { position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px; border-radius: 8px; display: none; z-index: 10000; }
     </style>
@@ -47,27 +46,24 @@
             <h2>登記新券 (使用)</h2>
             <div class="reg-grid">
                 <div>
-                    <div class="form-group"><label>首碼</label><input type="text" id="regStart"></div>
-                    <div class="form-group"><label>尾碼</label><input type="text" id="regEnd"></div>
+                    <div class="form-group"><label>首碼</label><input type="text" id="regStart" oninput="autoDetect()"></div>
+                    <div class="form-group"><label>尾碼</label><input type="text" id="regEnd" oninput="previewCalc()"></div>
                 </div>
                 <div>
                     <div class="form-group"><label>供應商</label><select id="regSupplierSelect" onchange="updateGiftSelect()"><option value="">請選擇</option></select></div>
-                    <div class="form-group"><label>禮券項目</label><select id="regGiftSelect"><option value="">請選擇</option></select></div>
+                    <div class="form-group"><label>禮券項目</label><select id="regGiftSelect" onchange="previewCalc()"><option value="">請選擇</option></select></div>
                 </div>
             </div>
+            <p>計算數量: <strong id="pCount" style="color:red; font-size:18px;">0</strong></p>
             <div class="form-group"><label>訂單號 (必填)</label><input type="text" id="orderNo"></div>
-            <button onclick="submitUsage()" style="width:100%; background:#28a745;">正式登記使用</button>
+            <button onclick="submitUsage()" style="width:100%; background:#28a745; margin-top:10px;">正式登記使用</button>
         </div>
 
         <div id="arrivalPage" class="page">
             <h2>貨到登記</h2>
             <div class="reg-grid">
-                <div>
-                    <div class="form-group"><label>供應商</label><select id="arrSupplierSelect" onchange="updateArrGiftSelect()"><option value="">請選擇</option></select></div>
-                </div>
-                <div>
-                    <div class="form-group"><label>禮券項目</label><select id="arrGiftSelect"><option value="">請選擇</option></select></div>
-                </div>
+                <div class="form-group"><label>供應商</label><select id="arrSupplierSelect" onchange="updateArrGiftSelect()"><option value="">請選擇</option></select></div>
+                <div class="form-group"><label>禮券項目</label><select id="arrGiftSelect"><option value="">請選擇</option></select></div>
             </div>
             <div class="form-group"><label>首碼</label><input type="text" id="arrStart"></div>
             <div class="form-group"><label>尾碼</label><input type="text" id="arrEnd"></div>
@@ -77,7 +73,7 @@
         <div id="recordsPage" class="page">
             <h2>流水帳記錄</h2>
             <table id="recordsTable">
-                <thead><tr><th>時間</th><th>供應商</th><th>項目</th><th>首碼</th><th>尾碼</th><th>數量</th><th>操作</th></tr></thead>
+                <thead><tr><th>時間</th><th>供應商</th><th>項目</th><th>首碼</th><th>尾碼</th><th>數量</th></tr></thead>
                 <tbody id="recordsBody"></tbody>
             </table>
         </div>
@@ -86,18 +82,41 @@
 
 <script>
     const G_URL = 'https://script.google.com/macros/s/AKfycbyaNhmrSWqrYEy03ZqY-Ksy2Pqpm-nQsZlwyKsC83PI8IU7uenwCyIlZ5FFJn6Gxph3/exec';
-    let giftDatabase = [], currentUser = "";
+    let giftDatabase = [];
 
-    function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg || "操作成功！"; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2000); }
-    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
-    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+    // --- 舊有的計算與偵測邏輯 ---
+    function calculateCount(start, end, type) {
+        let a = start.replace(/[^0-9]/g, '');
+        let b = end.replace(/[^0-9]/g, '');
+        if (type === 'suffix_1') return Math.abs(parseInt(b.slice(0, -1), 10) - parseInt(a.slice(0, -1), 10)) + 1;
+        if (type === 'suffix_2') return Math.abs(parseInt(b.slice(0, -2), 10) - parseInt(a.slice(0, -2), 10)) + 1;
+        if (type === 'suffix_12') return Math.abs(parseInt(b.slice(-12), 10) - parseInt(a.slice(-12), 10)) + 1;
+        return Math.abs(parseInt(b, 10) - parseInt(a, 10)) + 1;
+    }
 
+    function autoDetect() {
+        const s = document.getElementById('regStart').value.trim();
+        const match = giftDatabase.find(item => item.rule2 && s.startsWith(item.rule2.split(':')[1]));
+        if (match) {
+            document.getElementById('regSupplierSelect').value = match.supplier;
+            updateGiftSelect();
+            document.getElementById('regGiftSelect').value = match.name;
+        }
+    }
+
+    function previewCalc() {
+        const match = giftDatabase.find(i => i.name === document.getElementById('regGiftSelect').value);
+        if (match && document.getElementById('regStart').value && document.getElementById('regEnd').value) {
+            document.getElementById('pCount').innerText = calculateCount(document.getElementById('regStart').value, document.getElementById('regEnd').value, match.calcType);
+        }
+    }
+
+    // --- 系統功能 ---
     async function handleLogin() {
         showLoading();
         const res = await fetch(`${G_URL}?action=verify&email=${document.getElementById('loginEmail').value}&code=${document.getElementById('loginCode').value}`);
         const data = await res.json();
         if (data.success) {
-            currentUser = data.name;
             document.getElementById('loginPage').classList.remove('active');
             document.getElementById('appPage').classList.add('active');
             await loadConfig();
@@ -109,24 +128,19 @@
         const res = await fetch(`${G_URL}?action=getConfig`);
         giftDatabase = await res.json();
         const suppliers = [...new Set(giftDatabase.map(i => i.supplier))];
-        
-        const regSup = document.getElementById('regSupplierSelect');
-        regSup.innerHTML = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
-        
-        const arrSup = document.getElementById('arrSupplierSelect');
-        arrSup.innerHTML = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+        const sHtml = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+        document.getElementById('regSupplierSelect').innerHTML = sHtml;
+        document.getElementById('arrSupplierSelect').innerHTML = sHtml;
     }
 
     function updateGiftSelect() {
         const s = document.getElementById('regSupplierSelect').value;
-        const filtered = giftDatabase.filter(i => i.supplier === s);
-        document.getElementById('regGiftSelect').innerHTML = '<option value="">請選擇</option>' + filtered.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+        document.getElementById('regGiftSelect').innerHTML = '<option value="">請選擇</option>' + giftDatabase.filter(i => i.supplier === s).map(g => `<option value="${g.name}">${g.name}</option>`).join('');
     }
 
     function updateArrGiftSelect() {
         const s = document.getElementById('arrSupplierSelect').value;
-        const filtered = giftDatabase.filter(i => i.supplier === s);
-        document.getElementById('arrGiftSelect').innerHTML = '<option value="">請選擇</option>' + filtered.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+        document.getElementById('arrGiftSelect').innerHTML = '<option value="">請選擇</option>' + giftDatabase.filter(i => i.supplier === s).map(g => `<option value="${g.name}">${g.name}</option>`).join('');
     }
 
     async function submitArrival() {
@@ -135,8 +149,7 @@
         const res = await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
         const result = await res.json();
         hideLoading();
-        if(result.success) { showToast("到貨登記成功！"); document.getElementById('arrStart').value = ''; document.getElementById('arrEnd').value = ''; } 
-        else { alert(result.message); }
+        if(result.success) { alert("到貨登記成功！"); } else { alert(result.message); }
     }
 
     async function submitUsage() {
@@ -144,13 +157,16 @@
         const payload = { action: 'updateUsageStatus', brand: document.getElementById('regSupplierSelect').value, product: document.getElementById('regGiftSelect').value, start: document.getElementById('regStart').value, end: document.getElementById('regEnd').value, orderNo: document.getElementById('orderNo').value };
         await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
         hideLoading();
-        showToast("使用登記成功！");
+        alert("使用登記成功！");
     }
 
     function switchPage(p) {
         document.querySelectorAll('#appPage .page').forEach(e => e.classList.remove('active'));
         document.getElementById(p).classList.add('active');
     }
+    
+    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 </script>
 </body>
 </html>
