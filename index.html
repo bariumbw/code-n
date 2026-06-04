@@ -244,8 +244,8 @@
 
   <script>
     const G_URL = 'https://script.google.com/macros/s/AKfycbxSQ4rGGID2qdsGMILjwhUX1S0ujFmXE9riK9t9opqmuxkC_oAF7zEW1F1RzGddJOs/exec';
-    let giftDatabase = [], currentUser = "", sortDesc = true;
-    let detectTimer; // 用於控制防抖的計時器
+    let giftDatabase = [], currentUser = "";
+    let sortDesc = true;
 
     function showToast() {
       const t = document.getElementById('toast');
@@ -339,33 +339,26 @@
       previewData();
     }
 
-    // 雙層自動識別整合 (加入 400ms 防抖優化)
-    function autoDetect() {
+    // 精確修改：依要求調整識別門檻：少於 5 個字或多於 19 個字直接不發送請求
+    async function autoDetect() {
       const prefix = document.getElementById('regStart').value.trim();
       
-      // 門檻：長度小於 4 碼直接清除計時器並不查
-      if (prefix.length < 4) {
-        clearTimeout(detectTimer);
-        return;
-      }
+      // 核心業務規則阻斷：長度不在 5 ~ 19 之間則直接退出
+      if (prefix.length < 5 || prefix.length > 19) return;
       
-      // 每次按鍵都清除舊計時器，手停下 400 毫秒後才發送請求
-      clearTimeout(detectTimer);
-      detectTimer = setTimeout(async () => {
-        try {
-          const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`);
-          const data = await res.json();
-          
-          if (data && data.found) {
-            document.getElementById('regSupplierSelect').value = data.supplier;
-            updateGiftSelect(); 
-            document.getElementById('regGiftSelect').value = data.giftName;
-            previewData();
-          }
-        } catch (err) {
-          console.error('雙層比對失敗', err);
+      try {
+        const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`, { mode: 'cors' });
+        const data = await res.json();
+        
+        if (data && data.found) {
+          document.getElementById('regSupplierSelect').value = data.supplier;
+          updateGiftSelect(); 
+          document.getElementById('regGiftSelect').value = data.giftName;
+          previewData();
         }
-      }, 400);
+      } catch (err) {
+        console.error('雙層自動識別連線失敗', err);
+      }
     }
 
     function previewData() {
@@ -417,7 +410,7 @@
           expiry: document.getElementById('pExpiry').innerText
         };
 
-        await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
+        await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload), mode: 'cors' });
         
         document.getElementById('regStart').value = '';
         document.getElementById('regEnd').value = '';
@@ -458,7 +451,7 @@
         document.getElementById('recordsBody').innerHTML = recordsWithObjects.map((item) => {
           const r = item.data;
           const idx = item.oriIndex;
-          const isDel = r[8] === "...已登記刪除" || r[8] === "已登記刪除";
+          const isDel = r[8] === "...已登記刪除" || r[8] === "快照/已登記刪除" || r[8] === "已登記刪除";
           const expiryVal = r[9] || 'N/A';
           return `<tr>
             <td>${new Date(r[0]).toLocaleString()}</td>
@@ -508,7 +501,8 @@
             end: inputs[3].value,
             count: c,
             orderNo: inputs[4].value
-          })
+          }),
+          mode: 'cors'
         });
         loadRecords();
       } catch (err) {
@@ -523,7 +517,8 @@
       try {
         await fetch(G_URL, {
           method: 'POST',
-          body: JSON.stringify({ action: 'markDeleted', index: i })
+          body: JSON.stringify({ action: 'markDeleted', index: i }),
+          mode: 'cors'
         });
         loadRecords();
       } catch (err) {
