@@ -293,6 +293,7 @@
       return Math.abs(valB - valA) + 1;
     }
 
+    // 精確修改：移除引發跨域阻斷的 mode 宣告，改為最原生安全的 get 請求
     async function handleLogin() {
       const email = document.getElementById('loginEmail').value.trim();
       const code = document.getElementById('loginCode').value.trim();
@@ -346,7 +347,7 @@
       if (prefix.length < 5 || prefix.length > 19) return;
       
       try {
-        const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`, { mode: 'cors' });
+        const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`);
         const data = await res.json();
         
         if (data && data.found) {
@@ -379,6 +380,7 @@
       }
     }
 
+    // 精確優化：使用不帶特殊 Header 的標準 POST 傳輸，徹底避免不相容的 CORS 預檢攔截
     async function confirmSubmit() {
       const orderNo = document.getElementById('orderNo').value.trim();
       const supplier = document.getElementById('regSupplierSelect').value;
@@ -409,9 +411,13 @@
           expiry: document.getElementById('pExpiry').innerText
         };
 
-        await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload), mode: 'cors' });
+        // 改為 text/plain 模式傳送，能完美避開瀏覽器跨域攔截
+        await fetch(G_URL, { 
+          method: 'POST', 
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
         
-        // 操作小卡規範：存檔成功後立即自動清空所有輸入欄位
         document.getElementById('regStart').value = '';
         document.getElementById('regEnd').value = '';
         document.getElementById('orderNo').value = '';
@@ -420,7 +426,7 @@
         document.getElementById('previewBox').style.display = 'none';
         showToast();
       } catch (err) {
-        alert('寫入失敗，請檢查網路連線或重試');
+        alert('連線失敗，請稍後再試');
       } finally {
         hideLoading();
       }
@@ -502,7 +508,7 @@
             count: c,
             orderNo: inputs[4].value
           }),
-          mode: 'cors'
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
         loadRecords();
       } catch (err) {
@@ -518,7 +524,7 @@
         await fetch(G_URL, {
           method: 'POST',
           body: JSON.stringify({ action: 'markDeleted', index: i }),
-          mode: 'cors'
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
         loadRecords();
       } catch (err) {
