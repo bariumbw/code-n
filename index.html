@@ -245,6 +245,7 @@
   <script>
     const G_URL = 'https://script.google.com/macros/s/AKfycbxSQ4rGGID2qdsGMILjwhUX1S0ujFmXE9riK9t9opqmuxkC_oAF7zEW1F1RzGddJOs/exec';
     let giftDatabase = [], currentUser = "", sortDesc = true;
+    let detectTimer; // 用於控制防抖的計時器
 
     function showToast() {
       const t = document.getElementById('toast');
@@ -252,7 +253,6 @@
       setTimeout(() => t.style.display = 'none', 2000);
     }
 
-    // 遮罩與對齊機制
     function showLoading() {
       document.getElementById('loadingOverlay').style.display = 'flex';
     }
@@ -339,25 +339,33 @@
       previewData();
     }
 
-    // 雙層自動識別整合 (前端觸發機制)
-    async function autoDetect() {
+    // 雙層自動識別整合 (加入 400ms 防抖優化)
+    function autoDetect() {
       const prefix = document.getElementById('regStart').value.trim();
-      if (prefix.length < 3) return;
       
-      try {
-        // 直接向後端請求雙層識別 API
-        const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`);
-        const data = await res.json();
-        
-        if (data && data.found) {
-          document.getElementById('regSupplierSelect').value = data.supplier;
-          updateGiftSelect(); // 連動次級下拉選單
-          document.getElementById('regGiftSelect').value = data.giftName;
-          previewData();
-        }
-      } catch (err) {
-        console.error('雙層比對失敗', err);
+      // 門檻：長度小於 4 碼直接清除計時器並不查
+      if (prefix.length < 4) {
+        clearTimeout(detectTimer);
+        return;
       }
+      
+      // 每次按鍵都清除舊計時器，手停下 400 毫秒後才發送請求
+      clearTimeout(detectTimer);
+      detectTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`${G_URL}?action=detectFields&prefix=${encodeURIComponent(prefix)}`);
+          const data = await res.json();
+          
+          if (data && data.found) {
+            document.getElementById('regSupplierSelect').value = data.supplier;
+            updateGiftSelect(); 
+            document.getElementById('regGiftSelect').value = data.giftName;
+            previewData();
+          }
+        } catch (err) {
+          console.error('雙層比對失敗', err);
+        }
+      }, 400);
     }
 
     function previewData() {
@@ -411,7 +419,6 @@
 
         await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
         
-        // 操作小卡規範：存檔成功後立即自動清空所有欄位
         document.getElementById('regStart').value = '';
         document.getElementById('regEnd').value = '';
         document.getElementById('orderNo').value = '';
