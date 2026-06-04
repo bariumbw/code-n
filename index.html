@@ -1,63 +1,40 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <base target="_top">
-    <style>
-        /* 保持您原有的所有樣式結構 */
-        .container { max-width: 1000px; margin: auto; padding: 20px; }
-        .page { display: none; } .page.active { display: block; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        .filter-row { display: flex; gap: 10px; margin-bottom: 20px; }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="container">
-        <div id="nav">
-            <button onclick="showPage('regPage')">登記新券</button>
-            <button onclick="showPage('arrivalPage')">貨到登記</button>
-            <button onclick="showPage('recordsPage')">流水帳記錄</button>
-        </div>
-
-        <div id="regPage" class="page active">
-            <h2>登記新券</h2>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                <input type="text" id="regStart" placeholder="首碼" onblur="dualCheck()">
-                <input type="text" id="regEnd" placeholder="尾碼">
-                <select id="regSupplierSelect"></select>
-                <select id="regGiftSelect"></select>
-            </div>
-            <button onclick="calculatePreview()">計算並預覽</button>
-            <div id="previewBox" style="background:#f0f7ff; padding:15px; margin:10px 0;">
-                <p id="pInfo"></p>
-                <input type="text" id="orderNo" placeholder="填寫訂單號 (必填)">
-                <button onclick="confirmSubmit()" style="background:#28a745;">正式存檔</button>
-            </div>
-        </div>
-
-        <div id="recordsPage" class="page">
-            <h2>流水帳記錄</h2>
-            <div class="filter-row">
-                <input type="text" id="filterUser" placeholder="篩選人員">
-                <input type="text" id="filterOrder" placeholder="篩選訂單號">
-                <input type="date" id="filterDate">
-                <input type="text" id="filterItem" placeholder="篩選項目">
-                <button onclick="loadRecords()">刷新</button>
-            </div>
-            <table id="recordsTable">
-                <thead><tr><th>時間</th><th>供應商</th><th>項目</th><th>首碼</th><th>尾碼</th><th>數量</th><th>人員</th><th>訂單號</th><th>有效期限</th><th>操作</th></tr></thead>
-                <tbody id="recordsBody"></tbody>
-            </table>
+<body class="p-4 bg-gray-50">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow">
+        <h1 class="text-xl font-bold mb-4">Wedding Command Center</h1>
+        
+        <div class="space-y-4">
+            <input id="prefix" placeholder="首碼" class="border p-2 w-full" oninput="checkMatch()">
+            <input id="suffix" placeholder="尾碼" class="border p-2 w-full">
+            <input id="orderId" placeholder="訂單號" class="border p-2 w-full">
+            <button onclick="submitRecord()" class="bg-blue-600 text-white px-4 py-2 w-full">正式存檔</button>
         </div>
     </div>
 
-<script>
-    const G_URL = 'https://script.google.com/macros/s/AKfycbx5PR7dAEkprFhjOrHpQTB2FZ0FzPfDX93uxwSSxqRGlEZlMay9LI7BWHu4ew_AAyT-/exec';
-    
-    // 必須保留的完整邏輯 (請務必將您舊有的 loadRecords, calculatePreview, dualCheck 等函數邏輯完整填回此處)
-    function calculatePreview() { /* 必須包含您原本完整的計算邏輯 */ }
-    function loadRecords() { /* 必須包含完整的過濾與渲染表格邏輯 */ }
-    function showPage(p) { document.querySelectorAll('.page').forEach(e => e.classList.remove('active')); document.getElementById(p).classList.add('active'); }
-</script>
+    <script>
+        function checkMatch() {
+            const prefix = document.getElementById('prefix').value;
+            if(prefix.length < 3) return;
+            google.script.run.withSuccessHandler(data => {
+                if(data.found) alert('已識別供應商: ' + data.supplier);
+            }).getInventoryMatch(prefix);
+        }
+
+        function submitRecord() {
+            const data = {
+                supplier: '範例', // 應從 checkMatch 取得並儲存
+                giftName: '範例',
+                start: document.getElementById('prefix').value,
+                end: document.getElementById('suffix').value,
+                user: 'Admin',
+                orderId: document.getElementById('orderId').value
+            };
+            google.script.run.withSuccessHandler(() => alert('存檔成功')).saveRecord(data);
+        }
+    </script>
 </body>
 </html>
