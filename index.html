@@ -1,40 +1,68 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="p-4 bg-gray-50">
-    <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow">
-        <h1 class="text-xl font-bold mb-4">Wedding Command Center</h1>
-        
-        <div class="space-y-4">
-            <input id="prefix" placeholder="首碼" class="border p-2 w-full" oninput="checkMatch()">
-            <input id="suffix" placeholder="尾碼" class="border p-2 w-full">
-            <input id="orderId" placeholder="訂單號" class="border p-2 w-full">
-            <button onclick="submitRecord()" class="bg-blue-600 text-white px-4 py-2 w-full">正式存檔</button>
-        </div>
-    </div>
+// ==========================================
+// 1. 核心功能：依首碼比對 Inventory 庫存表
+// ==========================================
+function getInventoryMatch(prefix) {
+  if (!prefix || prefix.length < 3) return { found: false };
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const invSheet = ss.getSheetByName('Inventory');
+  if (!invSheet) return { found: false };
+  
+  const data = invSheet.getDataRange().getValues();
+  // 欄位索引對照：0:編號, 1:品牌(Supplier), 2:產品(GiftName), 3:狀態
+  for (let i = 1; i < data.length; i++) {
+    const invId = String(data[i][0]);
+    if (invId.startsWith(prefix) && data[i][3] === '未使用') {
+      return {
+        found: true,
+        supplier: data[i][1], 
+        giftName: data[i][2]  
+      };
+    }
+  }
+  return { found: false };
+}
 
-    <script>
-        function checkMatch() {
-            const prefix = document.getElementById('prefix').value;
-            if(prefix.length < 3) return;
-            google.script.run.withSuccessHandler(data => {
-                if(data.found) alert('已識別供應商: ' + data.supplier);
-            }).getInventoryMatch(prefix);
-        }
+// ==========================================
+// 2. 核心功能：正式存檔紀錄並同步反向歸位庫存
+// ==========================================
+function saveRecord(recordData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const recSheet = ss.getSheetByName('Records');
+  const invSheet = ss.getSheetByName('Inventory');
+  
+  const timestamp = new Date();
+  
+  // 寫入 Records 流水帳
+  // 欄位結構：Timestamp|Supplier|GiftName|Start|EndCount(此處拆為Start, End, Count)|User|訂單號|操作
+  recSheet.appendRow([
+    timestamp,
+    recordData.supplier,
+    recordData.giftName,
+    recordData.start,
+    recordData.end,
+    recordData.count,
+    recordData.user,
+    recordData.orderId,
+    '正式存檔'
+  ]);
+  
+  // 更新 Inventory 庫存狀態 (精確匹配首碼編號)
+  const invData = invSheet.getDataRange().getValues();
+  for (let i = 1; i < invData.length; i++) {
+    if (String(invData[i][0]).startsWith(recordData.start)) {
+      invSheet.getRange(i + 1, 4).setValue('已使用');         // 狀態
+      invSheet.getRange(i + 1, 5).setValue(recordData.orderId); // 單號
+      invSheet.getRange(i + 1, 7).setValue(timestamp);        // 使用登記時間
+      break;
+    }
+  }
+  return true;
+}
 
-        function submitRecord() {
-            const data = {
-                supplier: '範例', // 應從 checkMatch 取得並儲存
-                giftName: '範例',
-                start: document.getElementById('prefix').value,
-                end: document.getElementById('suffix').value,
-                user: 'Admin',
-                orderId: document.getElementById('orderId').value
-            };
-            google.script.run.withSuccessHandler(() => alert('存檔成功')).saveRecord(data);
-        }
-    </script>
-</body>
-</html>
+// 網頁應用程式進入點
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('Wedding Command Center')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
