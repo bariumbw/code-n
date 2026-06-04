@@ -179,6 +179,10 @@
               <label>尾碼</label>
               <input type="text" id="regEnd" oninput="previewData()">
             </div>
+            <div class="form-group">
+              <label>填寫訂單號 (必填)</label>
+              <input type="text" id="orderNo" required placeholder="請輸入單號">
+            </div>
           </div>
           <div>
             <div class="form-group">
@@ -204,11 +208,7 @@
           <p>範圍: <span id="pStart"></span> ~ <span id="pEnd"></span></p>
           <p>有效日期: <span id="pExpiry"></span></p>
           <p>系統計算數量: <strong id="pCount" style="color:red; font-size:18px;"></strong></p>
-          <div class="form-group" style="margin-top:15px;">
-            <label>填寫訂單號 (必填)</label>
-            <input type="text" id="orderNo" required>
-          </div>
-          <button onclick="confirmSubmit()" style="background:#28a745; width:100%; color:white; padding:10px; border:none; border-radius:5px;">正式存檔</button>
+          <button onclick="confirmSubmit()" style="background:#28a745; width:100%; color:white; padding:10px; border:none; border-radius:5px; margin-top:10px;">確認無誤，正式存檔</button>
         </div>
       </div>
 
@@ -339,11 +339,10 @@
       previewData();
     }
 
-    // 精確修改：依要求調整識別門檻：少於 5 個字或多於 19 個字直接不發送請求
     async function autoDetect() {
       const prefix = document.getElementById('regStart').value.trim();
       
-      // 核心業務規則阻斷：長度不在 5 ~ 19 之間則直接退出
+      // 5 ~ 19 碼精確區間阻斷
       if (prefix.length < 5 || prefix.length > 19) return;
       
       try {
@@ -412,6 +411,7 @@
 
         await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload), mode: 'cors' });
         
+        // 操作小卡規範：存檔成功後立即自動清空所有輸入欄位
         document.getElementById('regStart').value = '';
         document.getElementById('regEnd').value = '';
         document.getElementById('orderNo').value = '';
