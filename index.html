@@ -47,7 +47,7 @@
             <h2>登記新券 (使用)</h2>
             <div class="reg-grid">
                 <div>
-                    <div class="form-group"><label>首碼</label><input type="text" id="regStart" oninput="autoDetect()"></div>
+                    <div class="form-group"><label>首碼</label><input type="text" id="regStart"></div>
                     <div class="form-group"><label>尾碼</label><input type="text" id="regEnd"></div>
                 </div>
                 <div>
@@ -61,8 +61,14 @@
 
         <div id="arrivalPage" class="page">
             <h2>貨到登記</h2>
-            <div class="form-group"><label>品牌</label><input type="text" id="arrBrand"></div>
-            <div class="form-group"><label>產品</label><input type="text" id="arrProduct"></div>
+            <div class="reg-grid">
+                <div>
+                    <div class="form-group"><label>供應商</label><select id="arrSupplierSelect" onchange="updateArrGiftSelect()"><option value="">請選擇</option></select></div>
+                </div>
+                <div>
+                    <div class="form-group"><label>禮券項目</label><select id="arrGiftSelect"><option value="">請選擇</option></select></div>
+                </div>
+            </div>
             <div class="form-group"><label>首碼</label><input type="text" id="arrStart"></div>
             <div class="form-group"><label>尾碼</label><input type="text" id="arrEnd"></div>
             <button onclick="submitArrival()" style="width:100%; background:#0071e3;">存入庫存</button>
@@ -103,7 +109,12 @@
         const res = await fetch(`${G_URL}?action=getConfig`);
         giftDatabase = await res.json();
         const suppliers = [...new Set(giftDatabase.map(i => i.supplier))];
-        document.getElementById('regSupplierSelect').innerHTML = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+        
+        const regSup = document.getElementById('regSupplierSelect');
+        regSup.innerHTML = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+        
+        const arrSup = document.getElementById('arrSupplierSelect');
+        arrSup.innerHTML = '<option value="">請選擇</option>' + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
     }
 
     function updateGiftSelect() {
@@ -112,17 +123,22 @@
         document.getElementById('regGiftSelect').innerHTML = '<option value="">請選擇</option>' + filtered.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
     }
 
-    // 貨到登記提交
+    function updateArrGiftSelect() {
+        const s = document.getElementById('arrSupplierSelect').value;
+        const filtered = giftDatabase.filter(i => i.supplier === s);
+        document.getElementById('arrGiftSelect').innerHTML = '<option value="">請選擇</option>' + filtered.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+    }
+
     async function submitArrival() {
         showLoading();
-        const payload = { action: 'batchRegisterArrival', brand: document.getElementById('arrBrand').value, product: document.getElementById('arrProduct').value, start: document.getElementById('arrStart').value, end: document.getElementById('arrEnd').value };
+        const payload = { action: 'batchRegisterArrival', brand: document.getElementById('arrSupplierSelect').value, product: document.getElementById('arrGiftSelect').value, start: document.getElementById('arrStart').value, end: document.getElementById('arrEnd').value };
         const res = await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
         const result = await res.json();
         hideLoading();
-        if(result.success) showToast("到貨登記成功！"); else alert(result.message);
+        if(result.success) { showToast("到貨登記成功！"); document.getElementById('arrStart').value = ''; document.getElementById('arrEnd').value = ''; } 
+        else { alert(result.message); }
     }
 
-    // 使用登記提交 (整合自動覆蓋)
     async function submitUsage() {
         showLoading();
         const payload = { action: 'updateUsageStatus', brand: document.getElementById('regSupplierSelect').value, product: document.getElementById('regGiftSelect').value, start: document.getElementById('regStart').value, end: document.getElementById('regEnd').value, orderNo: document.getElementById('orderNo').value };
