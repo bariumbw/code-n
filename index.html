@@ -2,142 +2,95 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wedding Command Center</title>
     <style>
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #f5f5f7; padding: 20px; display: flex; justify-content: center; min-height: 100vh; }
-        .container { width: 100%; max-width: 900px; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        body { font-family: sans-serif; background: #f5f5f7; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: #fff; padding: 25px; border-radius: 12px; }
         .page { display: none; } .page.active { display: block; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px; }
-        button { padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
-        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        .reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        button { padding: 10px; cursor: pointer; border: none; border-radius: 6px; background: #0071e3; color: white; }
+        #previewBox { background: #f0f7ff; padding: 15px; border-radius: 10px; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
     </style>
 </head>
 <body>
-
-<div id="loadingOverlay">處理中...</div>
-
 <div class="container">
-    <div id="loginPage" class="page active">
-        <h2>系統驗證</h2>
-        <div class="form-group"><label>Email</label><input type="email" id="loginEmail"></div>
-        <div class="form-group"><label>密碼</label><input type="password" id="loginCode"></div>
-        <button onclick="handleLogin()">登入系統</button>
-    </div>
+    <nav style="margin-bottom:20px;">
+        <button onclick="switchPage('regPage')">登記新券</button>
+        <button onclick="switchPage('recordsPage')">記錄列表</button>
+    </nav>
 
-    <div id="appPage" class="page">
-        <nav style="margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-            <button onclick="switchPage('regPage')">登記新券</button>
-            <button onclick="switchPage('arrivalPage')">貨到登記</button>
-        </nav>
-
-        <div id="regPage" class="page active">
-            <h2>登記新券 (使用)</h2>
+    <div id="regPage" class="page active">
+        <h2>登記新券</h2>
+        <div class="reg-grid">
             <div class="form-group"><label>首碼</label><input type="text" id="regStart" onblur="dualCheck()"></div>
             <div class="form-group"><label>尾碼</label><input type="text" id="regEnd"></div>
-            <div class="form-group"><label>供應商</label><select id="regSupplierSelect" onchange="updateGiftSelect('reg')"><option value="">請選擇</option></select></div>
-            <div class="form-group"><label>禮券項目</label><select id="regGiftSelect"><option value="">請選擇</option></select></div>
-            <div class="form-group"><label>訂單號</label><input type="text" id="orderNo"></div>
-            <button onclick="confirmSubmit()" style="background:#28a745; width:100%;">確認登記扣庫存</button>
+            <div class="form-group"><label>供應商</label><select id="regSupplierSelect"></select></div>
+            <div class="form-group"><label>項目</label><select id="regGiftSelect"></select></div>
         </div>
+        <button onclick="calculatePreview()" style="width:100%; background:#6c757d; margin-top:10px;">計算並預覽</button>
+        
+        <div id="previewBox" style="display:none;">
+            <p><strong>預覽資訊</strong></p>
+            <p id="pInfo"></p>
+            <input type="text" id="orderNo" placeholder="填寫訂單號 (必填)" style="margin:10px 0;">
+            <button onclick="confirmSubmit()" style="width:100%; background:#28a745;">正式存檔</button>
+        </div>
+    </div>
 
-        <div id="arrivalPage" class="page">
-            <h2>貨到登記</h2>
-            <div class="form-group"><label>供應商</label><select id="arrSupplierSelect" onchange="updateGiftSelect('arr')"><option value="">請選擇</option></select></div>
-            <div class="form-group"><label>禮券項目</label><select id="arrGiftSelect"><option value="">請選擇</option></select></div>
-            <div class="form-group"><label>首碼</label><input type="text" id="arrStart"></div>
-            <div class="form-group"><label>尾碼</label><input type="text" id="arrEnd"></div>
-            <button onclick="submitArrival()" style="width:100%;">入庫存</button>
-        </div>
+    <div id="recordsPage" class="page">
+        <h2>記錄列表</h2>
+        <table id="recordsTable">
+            <thead><tr><th>時間</th><th>供應商</th><th>項目</th><th>首碼</th><th>尾碼</th><th>數量</th><th>訂單</th><th>操作</th></tr></thead>
+            <tbody id="recordsBody"></tbody>
+        </table>
     </div>
 </div>
 
 <script>
     const G_URL = 'https://script.google.com/macros/s/AKfycbx5PR7dAEkprFhjOrHpQTB2FZ0FzPfDX93uxwSSxqRGlEZlMay9LI7BWHu4ew_AAyT-/exec';
-    let giftDatabase = [];
-
-    async function handleLogin() {
-        showLoading();
-        const res = await fetch(`${G_URL}?action=verify&email=${document.getElementById('loginEmail').value}&code=${document.getElementById('loginCode').value}`);
-        const data = await res.json();
-        if (data.success) {
-            document.getElementById('loginPage').classList.remove('active');
-            document.getElementById('appPage').classList.add('active');
-            await loadConfig();
-            hideLoading();
-        } else { alert('驗證失敗'); hideLoading(); }
+    
+    // 計算預覽邏輯
+    function calculatePreview() {
+        const start = document.getElementById('regStart').value;
+        const end = document.getElementById('regEnd').value;
+        const count = Math.abs(parseInt(end) - parseInt(start)) + 1;
+        document.getElementById('pInfo').innerHTML = `範圍: ${start} ~ ${end}<br>系統計算數量: ${count}`;
+        document.getElementById('previewBox').style.display = 'block';
     }
 
-    async function loadConfig() {
-        const res = await fetch(`${G_URL}?action=getConfig`);
-        giftDatabase = await res.json();
-        const sups = [...new Set(giftDatabase.map(i => i.supplier))];
-        const options = '<option value="">請選擇</option>' + sups.map(s => `<option value="${s}">${s}</option>`).join('');
-        document.getElementById('regSupplierSelect').innerHTML = options;
-        document.getElementById('arrSupplierSelect').innerHTML = options;
-    }
-
-    function updateGiftSelect(prefix) {
-        const sup = document.getElementById(`${prefix}SupplierSelect`).value;
-        const target = document.getElementById(`${prefix}GiftSelect`);
-        const gifts = giftDatabase.filter(i => i.supplier === sup);
-        target.innerHTML = '<option value="">請選擇</option>' + gifts.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
-    }
-
+    // 雙重檢查與自動填寫
     async function dualCheck() {
-        const val = document.getElementById('regStart').value.trim();
+        const val = document.getElementById('regStart').value;
         if (!val) return;
-        showLoading();
         const res = await fetch(`${G_URL}?action=checkInventory&code=${val}`);
         const data = await res.json();
         if (data.found) {
             document.getElementById('regSupplierSelect').value = data.brand;
-            updateGiftSelect('reg');
             document.getElementById('regGiftSelect').value = data.product;
         }
-        hideLoading();
     }
 
     async function confirmSubmit() {
-        const start = document.getElementById('regStart').value;
-        const res = await fetch(`${G_URL}?action=checkDuplicate&start=${start}`);
-        const dup = await res.json();
-        if(dup.isDuplicate) { alert("此編號已登記過！"); return; }
-        
-        showLoading();
-        const payload = { 
-            action: 'updateUsageStatus', 
-            brand: document.getElementById('regSupplierSelect').value, 
-            product: document.getElementById('regGiftSelect').value, 
-            start: start, 
-            end: document.getElementById('regEnd').value, 
-            orderNo: document.getElementById('orderNo').value 
+        // 這裡對應您後端的 insertRecord
+        const payload = {
+            action: 'insertRecord',
+            supplier: document.getElementById('regSupplierSelect').value,
+            gift: document.getElementById('regGiftSelect').value,
+            start: document.getElementById('regStart').value,
+            end: document.getElementById('regEnd').value,
+            orderNo: document.getElementById('orderNo').value
         };
         await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
-        alert("登記成功，庫存已更新");
-        hideLoading();
+        alert("存檔成功");
     }
 
-    async function submitArrival() {
-        showLoading();
-        const payload = { 
-            action: 'batchRegisterArrival', 
-            brand: document.getElementById('arrSupplierSelect').value, 
-            product: document.getElementById('arrGiftSelect').value, 
-            start: document.getElementById('arrStart').value, 
-            end: document.getElementById('arrEnd').value 
-        };
-        await fetch(G_URL, { method: 'POST', body: JSON.stringify(payload) });
-        alert("入庫成功");
-        hideLoading();
+    function switchPage(p) { 
+        document.querySelectorAll('.page').forEach(e => e.classList.remove('active'));
+        document.getElementById(p).classList.add('active');
     }
-
-    function switchPage(p) { document.querySelectorAll('#appPage .page').forEach(e => e.classList.remove('active')); document.getElementById(p).classList.add('active'); }
-    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
-    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 </script>
 </body>
 </html>
