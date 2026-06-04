@@ -1,68 +1,145 @@
-// ==========================================
-// 1. 核心功能：依首碼比對 Inventory 庫存表
-// ==========================================
-function getInventoryMatch(prefix) {
-  if (!prefix || prefix.length < 3) return { found: false };
-  
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const invSheet = ss.getSheetByName('Inventory');
-  if (!invSheet) return { found: false };
-  
-  const data = invSheet.getDataRange().getValues();
-  // 欄位索引對照：0:編號, 1:品牌(Supplier), 2:產品(GiftName), 3:狀態
-  for (let i = 1; i < data.length; i++) {
-    const invId = String(data[i][0]);
-    if (invId.startsWith(prefix) && data[i][3] === '未使用') {
-      return {
-        found: true,
-        supplier: data[i][1], 
-        giftName: data[i][2]  
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-4 bg-gray-50 relative min-h-screen">
+
+  <!-- LoadingOverlay 遮罩 -->
+  <div id="loadingOverlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-4 rounded shadow-md flex items-center space-x-2">
+      <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+      <span class="text-gray-700 font-medium">處理中...</span>
+    </div>
+  </div>
+
+  <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-xl font-bold mb-4">Wedding Command Center</h1>
+    
+    <!-- 供應商即時識別提示 -->
+    <div id="supplierAlert" class="hidden mb-4 p-2 bg-green-100 text-green-800 rounded text-sm font-medium"></div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">首碼</label>
+        <input id="prefix" placeholder="請輸入首碼" class="border p-2 w-full rounded" oninput="checkMatch()">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">尾碼</label>
+        <input id="suffix" placeholder="請輸入尾碼" class="border p-2 w-full rounded" oninput="calculatePreview()">
+      </div>
+
+      <!-- 數量預覽區塊 (計算並預覽) -->
+      <div id="previewBox" class="p-3 bg-blue-50 text-blue-800 text-sm rounded hidden">
+        系統總數量預覽: <span id="previewCount" class="font-bold">0</span> 張
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">訂單號 <span class="text-red-500">*</span></label>
+        <input id="orderId" placeholder="請輸入訂單號 (必填)" class="border p-2 w-full rounded">
+      </div>
+
+      <button onclick="submitRecord()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 w-full rounded font-medium transition">
+        正式存檔
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 儲存目前由首碼自動識別出的供應商狀態
+    const currentSession = {
+      supplier: '',
+      giftName: '',
+      count: 0
+    };
+
+    // 1. 首碼變更：即時識別供應商
+    function checkMatch() {
+      const prefix = document.getElementById('prefix').value.trim();
+      if (prefix.length < 3) {
+        hideSupplier();
+        return;
+      }
+      
+      google.script.run.withSuccessHandler(data => {
+        if (data && data.found) {
+          currentSession.supplier = data.supplier;
+          currentSession.giftName = data.giftName;
+          const alertDiv = document.getElementById('supplierAlert');
+          alertDiv.textContent = `已識別供應商: ${data.supplier} (${data.giftName})`;
+          alertDiv.classList.remove('hidden');
+        } else {
+          hideSupplier();
+        }
+      }).getInventoryMatch(prefix);
+    }
+
+    function hideSupplier() {
+      currentSession.supplier = '';
+      currentSession.giftName = '';
+      document.getElementById('supplierAlert').classList.add('hidden');
+    }
+
+    // 2. 計算並預覽數量
+    function calculatePreview() {
+      const prefix = parseInt(document.getElementById('prefix').value, 10);
+      const suffix = parseInt(document.getElementById('suffix').value, 10);
+      const previewBox = document.getElementById('previewBox');
+      const previewCount = document.getElementById('previewCount');
+
+      if (!isNaN(prefix) && !isNaN(suffix) && suffix >= prefix) {
+        currentSession.count = (suffix - prefix) + 1;
+        previewCount.textContent = currentSession.count;
+        previewBox.classList.remove('hidden');
+      } else {
+        previewBox.classList.add('hidden');
+        currentSession.count = 0;
+      }
+    }
+
+    // 3. 正式存檔 (含 Loading 遮罩與訂單號強制綁定驗證)
+    function submitRecord() {
+      const orderId = document.getElementById('orderId').value.trim();
+      const prefix = document.getElementById('prefix').value.trim();
+      const suffix = document.getElementById('suffix').value.trim();
+
+      // 操作小卡強制綁定規則驗證
+      if (!orderId) {
+        alert('錯誤：訂單號是系統稽核的關鍵，無訂單號無法存檔！');
+        return;
+      }
+      if (!currentSession.supplier || !prefix || !suffix) {
+        alert('錯誤：請確認首碼與尾碼已正確輸入，且系統已成功識別供應商！');
+        return;
+      }
+
+      // 顯示 Loading 遮罩
+      document.getElementById('loadingOverlay').classList.remove('hidden');
+
+      const data = {
+        supplier: currentSession.supplier,
+        giftName: currentSession.giftName,
+        start: prefix,
+        end: suffix,
+        count: currentSession.count,
+        user: 'Admin', // 預設操作人，可後續對接 Users 工作表
+        orderId: orderId
       };
-    }
-  }
-  return { found: false };
-}
 
-// ==========================================
-// 2. 核心功能：正式存檔紀錄並同步反向歸位庫存
-// ==========================================
-function saveRecord(recordData) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const recSheet = ss.getSheetByName('Records');
-  const invSheet = ss.getSheetByName('Inventory');
-  
-  const timestamp = new Date();
-  
-  // 寫入 Records 流水帳
-  // 欄位結構：Timestamp|Supplier|GiftName|Start|EndCount(此處拆為Start, End, Count)|User|訂單號|操作
-  recSheet.appendRow([
-    timestamp,
-    recordData.supplier,
-    recordData.giftName,
-    recordData.start,
-    recordData.end,
-    recordData.count,
-    recordData.user,
-    recordData.orderId,
-    '正式存檔'
-  ]);
-  
-  // 更新 Inventory 庫存狀態 (精確匹配首碼編號)
-  const invData = invSheet.getDataRange().getValues();
-  for (let i = 1; i < invData.length; i++) {
-    if (String(invData[i][0]).startsWith(recordData.start)) {
-      invSheet.getRange(i + 1, 4).setValue('已使用');         // 狀態
-      invSheet.getRange(i + 1, 5).setValue(recordData.orderId); // 單號
-      invSheet.getRange(i + 1, 7).setValue(timestamp);        // 使用登記時間
-      break;
+      google.script.run.withSuccessHandler(() => {
+        // 隱藏遮罩並提示
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        alert('存檔成功！資料已即時同步至 Google Sheet 後端。');
+        
+        // 依據操作小卡規範：存檔後系統自動清空欄位
+        document.getElementById('prefix').value = '';
+        document.getElementById('suffix').value = '';
+        document.getElementById('orderId').value = '';
+        hideSupplier();
+        document.getElementById('previewBox').classList.add('hidden');
+      }).saveRecord(data);
     }
-  }
-  return true;
-}
-
-// 網頁應用程式進入點
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
-      .setTitle('Wedding Command Center')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
+  </script>
+</body>
+</html>
